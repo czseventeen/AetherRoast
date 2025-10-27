@@ -8,21 +8,16 @@ from utils.helpers import get_roast_stage, format_elapsed_time
 from profiles.profile_loader import RoastProfile
 
 class RoastController:
-    def __init__(
-        self,
-        ssr_pin=26,
-        pwm_period=0.5,
-        pid_gains=(2.3, 0.25, 2.5),
-        roast_profile_file=None,
-        log_file="roast_log.csv"
-    ):
-        self.ssr = SSRController(ssr_pin, pwm_period)
+    def __init__(self, ssr_pin=26, roast_profile_file=None, log_file="roast_log.csv"):
+        # Load profile first to get PID gains and PWM period
+        self.profile = RoastProfile(roast_profile_file)
+        
+        self.ssr = SSRController(ssr_pin, self.profile.pwm_period)
         self.temp_controller = TemperatureController(
-            pwm_period=pwm_period,
-            pid_gains=pid_gains
+            pwm_period=self.profile.pwm_period,
+            pid_gains=self.profile.pid_gains
         )
         self.logger = RoastLogger(log_file)
-        self.profile = RoastProfile(roast_profile_file)
         
         self.running = False
         self.start_time = None
@@ -56,7 +51,7 @@ class RoastController:
         """Start the roasting control loop"""
         self.running = True
         self.start_time = time.time()
-        print(f"[INFO] Starting temperature control at {self.temp_controller.setpoint:.1f} °C")
+        print(f"[INFO] Starting '{self.profile.name}' at {self.temp_controller.setpoint:.1f} °C")
         
         try:
             while self.running:

@@ -5,16 +5,14 @@ from roast_controller import RoastController
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 main.py <roast_profile.csv>")
+        print("Usage: python3 main.py <roast_profile.json>")
         sys.exit(1)
     
-    roast_profile_file = f"profiles/{sys.argv[1]}"
+    roast_profile_file = f"{sys.argv[1]}"
     
     controller = RoastController(
-        pid_gains=(2.3, 0.25, 2.5),
-        pwm_period=0.5,
         roast_profile_file=roast_profile_file,
-        log_file="profiles/roast_log.csv"
+        log_file="roast_log.csv"
     )
     
     try:

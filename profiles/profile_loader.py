@@ -1,33 +1,30 @@
 #!/usr/bin/env python3
-import csv
+import json
 import os
 import sys
 
 class RoastProfile:
     def __init__(self, profile_file=None):
-        self.profile_data = []
         if profile_file:
             self.load_profile(profile_file)
     
     def load_profile(self, file_path):
-        """Load roast profile from CSV file"""
+        """Load roast profile from JSON file"""
         if not os.path.exists(file_path):
             print(f"[ERROR] Roast profile file not found: {file_path}")
             sys.exit(1)
         
-        self.profile_data = []
-        with open(file_path, newline='') as csvfile:
-            reader = csv.reader(csvfile)
-            for row in reader:
-                try:
-                    t_sec = float(row[0])
-                    temp = float(row[1])
-                    self.profile_data.append((t_sec, temp))
-                except ValueError:
-                    print(f"[WARN] Skipping invalid line: {row}")
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        self.name = data.get("name", "")
+        self.description = data.get("description", "")
+        self.pid_gains = tuple(data.get("pid_gains", [2.3, 0.25, 2.5]))
+        self.pwm_period = data.get("pwm_period", 0.5)
+        self.profile_data = [(float(point[0]), float(point[1])) for point in data["roast_profile"]]
         
         self.profile_data.sort(key=lambda x: x[0])
-        print(f"[INFO] Loaded roast profile: {len(self.profile_data)} points")
+        print(f"[INFO] Loaded profile '{self.name}': {len(self.profile_data)} points")
     
     def interpolate_setpoint(self, elapsed):
         """Interpolate target temperature for given elapsed time"""

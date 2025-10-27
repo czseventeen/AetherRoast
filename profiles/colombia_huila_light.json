@@ -1,0 +1,17 @@
+{
+  "name": "Colombia Huila Light Roast",
+  "description": "Light roast preserving origin characteristics with bright acidity.",
+  "pid_gains": [2.3, 0.25, 2.5],
+  "pwm_period": 0.5,
+  "roast_profile": [
+    [0, 25],
+    [60, 120],
+    [120, 150],
+    [180, 170],
+    [240, 190],
+    [270, 196],
+    [300, 205],
+    [330, 210],
+    [360, 215]
+  ]
+}
