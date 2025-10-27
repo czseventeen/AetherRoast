@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+import csv
+import os
+import sys
+
+class RoastProfile:
+    def __init__(self, profile_file=None):
+        self.profile_data = []
+        if profile_file:
+            self.load_profile(profile_file)
+    
+    def load_profile(self, file_path):
+        """Load roast profile from CSV file"""
+        if not os.path.exists(file_path):
+            print(f"[ERROR] Roast profile file not found: {file_path}")
+            sys.exit(1)
+        
+        self.profile_data = []
+        with open(file_path, newline='') as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                try:
+                    t_sec = float(row[0])
+                    temp = float(row[1])
+                    self.profile_data.append((t_sec, temp))
+                except ValueError:
+                    print(f"[WARN] Skipping invalid line: {row}")
+        
+        self.profile_data.sort(key=lambda x: x[0])
+        print(f"[INFO] Loaded roast profile: {len(self.profile_data)} points")
+    
+    def interpolate_setpoint(self, elapsed):
+        """Interpolate target temperature for given elapsed time"""
+        if not self.profile_data or elapsed <= self.profile_data[0][0]:
+            return self.profile_data[0][1] if self.profile_data else 60.0
+        
+        for i in range(1, len(self.profile_data)):
+            t0, temp0 = self.profile_data[i - 1]
+            t1, temp1 = self.profile_data[i]
+            if elapsed <= t1:
+                ratio = (elapsed - t0) / (t1 - t0)
+                return temp0 + ratio * (temp1 - temp0)
+        
+        return self.profile_data[-1][1]
