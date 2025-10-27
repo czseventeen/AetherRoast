@@ -1,0 +1,22 @@
+{
+  "name": "Gesha Salma Bermudez Finca El Paraiso",
+  "description": "Optimized for small fluid-bed hot-air roasters. Bright, tea-like cup with jasmine, bergamot, and honey sweetness.",
+  "pid_gains": [1.8, 0.35, 2.0],
+  "pwm_period": 0.6,
+  "preheat": {
+    "temp_c": 180
+  },
+  "roast_profile": [
+    [0, 25],
+    [30, 120],
+    [60, 160],
+    [90, 180],
+    [150, 195],
+    [210, 205],
+    [270, 212],
+    [330, 218],
+    [390, 222],
+    [450, 225],
+    [510, 228]
+  ]
+}
