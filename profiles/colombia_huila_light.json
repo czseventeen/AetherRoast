@@ -3,6 +3,9 @@
   "description": "Light roast preserving origin characteristics with bright acidity.",
   "pid_gains": [2.3, 0.25, 2.5],
   "pwm_period": 0.5,
+  "preheat": {
+    "temp_c": 180
+  },
   "roast_profile": [
     [0, 25],
     [60, 120],

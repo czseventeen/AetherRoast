@@ -21,6 +21,7 @@ class RoastController:
         
         self.running = False
         self.start_time = None
+        self.preheat_complete = False
     
     def control_step(self):
         """Execute one control step"""
@@ -47,18 +48,63 @@ class RoastController:
         # Control SSR
         self.ssr.control_output(on_time)
     
+    def preheat_step(self, target_temp):
+        """Execute one preheat control step"""
+        current_temp = self.temp_controller.read_temperature()
+        on_time = self.temp_controller.calculate_output(current_temp)
+        
+        print(f"Preheat | Temp: {current_temp:.2f}°C | Target: {target_temp:.1f}°C | SSR ON: {on_time:.2f}s")
+        
+        self.ssr.control_output(on_time)
+        return current_temp >= target_temp - 2.0  # Within 2°C tolerance
+    
     def start(self):
         """Start the roasting control loop"""
         self.running = True
-        self.start_time = time.time()
-        print(f"[INFO] Starting '{self.profile.name}' at {self.temp_controller.setpoint:.1f} °C")
         
         try:
+            # Preheat phase if configured
+            if self.profile.preheat:
+                self.preheat_phase()
+            
+            # Start roasting phase only if still running
+            if not self.running:
+                return
+                
+            self.start_time = time.time()
+            print(f"[INFO] Starting roast phase for '{self.profile.name}'")
+            
             while self.running:
                 self.control_step()
         except Exception as e:
             print(f"[ERROR] {e}")
         finally:
+            self.shutdown()
+    
+    def preheat_phase(self):
+        """Handle preheat phase"""
+        preheat_temp = self.profile.preheat["temp_c"]
+        self.temp_controller.set_target(preheat_temp)
+        print(f"[INFO] Starting preheat to {preheat_temp}°C... Press ENTER when beans are dropped.")
+        
+        # Start input thread immediately
+        input_thread = threading.Thread(target=self.wait_for_bean_drop)
+        input_thread.start()
+        
+        # Continue heating until user presses enter
+        while self.running and not self.preheat_complete:
+            self.preheat_step(preheat_temp)
+        
+        input_thread.join(timeout=0.1)
+    
+    def wait_for_bean_drop(self):
+        """Wait for user to press enter indicating beans are dropped"""
+        try:
+            input()
+            if self.running:  # Only set if still running
+                self.preheat_complete = True
+                print("[INFO] Beans dropped! Starting roast profile...")
+        except (EOFError, KeyboardInterrupt):
             self.shutdown()
     
     def shutdown(self):
@@ -73,18 +119,3 @@ class RoastController:
         self.logger.close()
         print(f"[INFO] System shut down safely. SSR OFF. Log saved.")
     
-    def input_loop(self):
-        """Handle user input for manual temperature control"""
-        while self.running:
-            try:
-                inp = input("Enter new target temperature (°C) or Ctrl+C to exit: ").strip()
-                if inp:
-                    try:
-                        new_target = float(inp)
-                        self.temp_controller.set_target(new_target)
-                    except ValueError:
-                        print("[WARN] Invalid number, try again.")
-            except (EOFError, KeyboardInterrupt):
-                print("\n[INFO] KeyboardInterrupt detected — stopping control.")
-                self.shutdown()
-                break

@@ -16,11 +16,7 @@ def main():
     )
     
     try:
-        controller.running = True
-        control_thread = threading.Thread(target=controller.start)
-        control_thread.start()
-        
-        controller.input_loop()
+        controller.start()
         
     except KeyboardInterrupt:
         print("\n[INFO] Stopping by user request...")

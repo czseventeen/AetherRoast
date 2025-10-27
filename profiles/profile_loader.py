@@ -21,6 +21,7 @@ class RoastProfile:
         self.description = data.get("description", "")
         self.pid_gains = tuple(data.get("pid_gains", [2.3, 0.25, 2.5]))
         self.pwm_period = data.get("pwm_period", 0.5)
+        self.preheat = data.get("preheat")
         self.profile_data = [(float(point[0]), float(point[1])) for point in data["roast_profile"]]
         
         self.profile_data.sort(key=lambda x: x[0])
