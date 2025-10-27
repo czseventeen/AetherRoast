@@ -3,6 +3,7 @@ import time
 import threading
 from controller.ssr import SSRController
 from controller.temperature import TemperatureController
+from controller.fan import FanController
 from utils.logging import RoastLogger
 from utils.helpers import get_roast_stage, format_elapsed_time
 from profiles.profile_loader import RoastProfile
@@ -18,6 +19,7 @@ class RoastController:
             pid_gains=self.profile.pid_gains
         )
         self.logger = RoastLogger(log_file)
+        self.fan = FanController()
         
         self.running = False
         self.start_time = None
@@ -72,6 +74,7 @@ class RoastController:
                 return
                 
             self.start_time = time.time()
+            self.fan.set_speed(100)  # Set fan to 100% for roasting
             print(f"[INFO] Starting roast phase for '{self.profile.name}'")
             
             while self.running:
@@ -85,17 +88,19 @@ class RoastController:
         """Handle preheat phase"""
         preheat_temp = self.profile.preheat["temp_c"]
         self.temp_controller.set_target(preheat_temp)
+        self.fan.set_speed(100)  # Start fan at 100% for heating
         print(f"[INFO] Starting preheat to {preheat_temp}°C... Press ENTER when beans are dropped.")
         
         # Start input thread immediately
         input_thread = threading.Thread(target=self.wait_for_bean_drop)
         input_thread.start()
         
-        # Continue heating until user presses enter
+        # Continue heating until target reached or user presses enter
+        target_reached = False
         while self.running and not self.preheat_complete:
-            self.preheat_step(preheat_temp)
-        
-        input_thread.join(timeout=0.1)
+            if self.preheat_step(preheat_temp) and not target_reached:
+                self.fan.set_speed(20)  # Reduce to 20% when target reached
+                target_reached = True
     
     def wait_for_bean_drop(self):
         """Wait for user to press enter indicating beans are dropped"""
@@ -116,6 +121,7 @@ class RoastController:
         self.running = False
         self.ssr.turn_off()
         self.ssr.cleanup()
+        self.fan.shutdown()
         self.logger.close()
         print(f"[INFO] System shut down safely. SSR OFF. Log saved.")
     
