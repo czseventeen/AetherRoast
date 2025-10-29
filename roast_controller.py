@@ -24,6 +24,8 @@ class RoastController:
         self.running = False
         self.start_time = None
         self.preheat_complete = False
+        self.temp_offset = 0.0
+        self.manual_fan_speed = None
     
     def control_step(self):
         """Execute one control step"""
@@ -31,7 +33,8 @@ class RoastController:
         
         # Update setpoint from profile if available
         if self.profile.profile_data:
-            target_temp = self.profile.interpolate_setpoint(elapsed)
+            base_target = self.profile.interpolate_setpoint(elapsed)
+            target_temp = base_target + self.temp_offset
             self.temp_controller.set_target(target_temp)
         
         # Read temperature and calculate output
@@ -41,7 +44,7 @@ class RoastController:
         
         # Console output
         mmss = format_elapsed_time(elapsed)
-        print(f"Elapsed: {mmss} | Stage: {stage} | Temp: {current_temp:.2f}°C | "
+        print(f"\rElapsed: {mmss} | Stage: {stage} | Temp: {current_temp:.2f}°C | "
               f"Target: {self.temp_controller.setpoint:.2f}°C | SSR ON: {on_time:.2f}s")
         
         # Log data
@@ -76,9 +79,17 @@ class RoastController:
             self.start_time = time.time()
             self.fan.set_speed(100)  # Set fan to 100% for roasting
             print(f"[INFO] Starting roast phase for '{self.profile.name}'")
+            print(f"[INFO] Controls: 1-9=Fan%, 0=100%, +/-=Temp±5°C, r=Reset, q=Quit")
+            
+            # Start keyboard thread for roast controls
+            keyboard_thread = threading.Thread(target=self.keyboard_loop)
+            keyboard_thread.daemon = True
+            keyboard_thread.start()
             
             while self.running:
                 self.control_step()
+        except KeyboardInterrupt:
+            print("\n[INFO] KeyboardInterrupt detected - stopping roast...")
         except Exception as e:
             print(f"[ERROR] {e}")
         finally:
@@ -91,8 +102,9 @@ class RoastController:
         self.fan.set_speed(100)  # Start fan at 100% for heating
         print(f"[INFO] Starting preheat to {preheat_temp}°C... Press ENTER when beans are dropped.")
         
-        # Start input thread immediately
+        # Start bean drop thread
         input_thread = threading.Thread(target=self.wait_for_bean_drop)
+        input_thread.daemon = True
         input_thread.start()
         
         # Continue heating until target reached or user presses enter
@@ -103,13 +115,61 @@ class RoastController:
                 target_reached = True
     
     def wait_for_bean_drop(self):
-        """Wait for user to press enter indicating beans are dropped"""
+        """Wait for ENTER during preheat"""
         try:
             input()
-            if self.running:  # Only set if still running
+            if self.running:
                 self.preheat_complete = True
                 print("[INFO] Beans dropped! Starting roast profile...")
         except (EOFError, KeyboardInterrupt):
+            self.shutdown()
+    
+    def keyboard_loop(self):
+        """Handle keyboard controls during roast"""
+        import sys, tty, termios, select
+        
+        if not sys.stdin.isatty():
+            return
+            
+        old_settings = termios.tcgetattr(sys.stdin)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            while self.running:
+                if select.select([sys.stdin], [], [], 0.1)[0]:
+                    key = sys.stdin.read(1)
+                    if ord(key) == 3:  # Ctrl+C
+                        self.shutdown()
+                        break
+                    self.handle_keypress(key)
+        except:
+            pass
+        finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+    
+    def handle_keypress(self, key):
+        """Process keyboard input for real-time adjustments"""
+        if key in '123456789':
+            fan_speed = int(key) * 10
+            self.manual_fan_speed = fan_speed
+            self.fan.set_speed(fan_speed)
+            print(f"[MANUAL] Fan speed: {fan_speed}%")
+        elif key == '0':
+            self.manual_fan_speed = 100
+            self.fan.set_speed(100)
+            print(f"[MANUAL] Fan speed: 100%")
+        elif key == '+':
+            self.temp_offset += 5.0
+            print(f"[MANUAL] Temp offset: {self.temp_offset:+.1f}°C")
+        elif key == '-':
+            self.temp_offset -= 5.0
+            print(f"[MANUAL] Temp offset: {self.temp_offset:+.1f}°C")
+        elif key == 'r':
+            self.temp_offset = 0.0
+            self.manual_fan_speed = None
+            self.fan.set_speed(100)
+            print(f"[MANUAL] Reset - Fan: 100%, Temp offset: 0°C")
+        elif key == 'q':
+            print(f"[MANUAL] Quit requested")
             self.shutdown()
     
     def shutdown(self):

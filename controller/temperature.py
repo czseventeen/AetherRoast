@@ -31,7 +31,6 @@ class TemperatureController:
         """Update target temperature"""
         self.setpoint = target_temp
         self.pid.setpoint = target_temp
-        print(f"[INFO] Target temperature updated to {target_temp:.1f} °C")
     
     def calculate_output(self, current_temp):
         """Calculate PID output for current temperature"""
