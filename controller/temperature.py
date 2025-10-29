@@ -20,12 +20,23 @@ class TemperatureController:
         self.pid.output_limits = (0, pwm_period)
     
     def read_temperature(self):
-        """Read temperature from sensor"""
-        with open(self.temp_raw_path) as f:
-            raw = int(f.read().strip())
-        with open(self.temp_scale_path) as f:
-            scale = int(f.read().strip())
-        return raw * scale / 1000.0
+        """Read temperature from sensor with retry logic"""
+        import time
+        
+        for attempt in range(5):
+            try:
+                with open(self.temp_raw_path) as f:
+                    raw = int(f.read().strip())
+                with open(self.temp_scale_path) as f:
+                    scale = int(f.read().strip())
+                return raw * scale / 1000.0
+            except Exception as e:
+                if attempt < 4:  # Don't print warning on last attempt
+                    print(f"[WARN] Temperature read attempt {attempt + 1} failed: {e}")
+                    time.sleep(0.1)  # Brief delay before retry
+                else:
+                    print(f"[ERROR] Temperature sensor failed after 5 attempts: {e}")
+                    raise
     
     def set_target(self, target_temp):
         """Update target temperature"""

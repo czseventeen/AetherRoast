@@ -20,16 +20,26 @@ class FanController:
     
     def set_speed(self, percentage):
         """Set fan speed as percentage (0-100)"""
-        if self.power_supply and self.power_supply.is_connected():
+        if not self.power_supply or not self.power_supply.is_connected():
+            print(f"[WARN] Fan control unavailable - requested {percentage}%")
+            return
+            
+        try:
             self.power_supply.set_output(self.channel, self.voltage, current_pct=percentage)
             if not self.is_on:
                 self.power_supply.output_on(self.channel)
                 self.is_on = True
             print(f"[INFO] Fan speed set to {percentage}%")
+        except Exception as e:
+            print(f"[ERROR] Fan/Power supply control failed: {e}")
+            self.power_supply = None  # Mark as disconnected
     
     def shutdown(self):
         """Turn off fan and close connection"""
-        if self.power_supply and self.power_supply.is_connected():
-            self.power_supply.output_off(self.channel)
-            self.power_supply.close()
-            print("[INFO] Fan controller shut down")
+        try:
+            if self.power_supply and self.power_supply.is_connected():
+                self.power_supply.output_off(self.channel)
+                self.power_supply.close()
+                print("[INFO] Fan controller shut down")
+        except Exception as e:
+            print(f"[WARN] Fan shutdown failed: {e}")
