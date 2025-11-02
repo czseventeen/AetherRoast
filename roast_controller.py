@@ -5,7 +5,7 @@ from controller.ssr import SSRController
 from controller.temperature import TemperatureController
 from controller.fan import FanController
 from utils.logging import RoastLogger
-from utils.helpers import get_roast_stage, format_elapsed_time
+from utils.helpers import get_roast_stage, format_elapsed_time, reset_roast_stage
 from profiles.profile_loader import RoastProfile
 
 class RoastController:
@@ -77,6 +77,7 @@ class RoastController:
                 return
                 
             self.start_time = time.time()
+            reset_roast_stage()  # Reset stage tracking for new roast
             self.fan.set_speed(100)  # Set fan to 100% for roasting
             print(f"[INFO] Starting roast phase for '{self.profile.name}'")
             print(f"[INFO] Controls: 1-9=Fan%, 0=100%, +/-=Temp±5°C, r=Reset, q=Quit")
