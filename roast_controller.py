@@ -68,8 +68,8 @@ class RoastController:
         self.running = True
         
         try:
-            # Preheat phase if configured
-            if self.profile.preheat:
+            # Preheat phase using time=0 temperature
+            if self.profile.preheat_temp:
                 self.preheat_phase()
             
             # Start roasting phase only if still running
@@ -98,7 +98,7 @@ class RoastController:
     
     def preheat_phase(self):
         """Handle preheat phase"""
-        preheat_temp = self.profile.preheat["temp_c"]
+        preheat_temp = self.profile.preheat_temp
         self.temp_controller.set_target(preheat_temp)
         self.fan.set_speed(100)  # Start fan at 100% for heating
         print(f"[INFO] Starting preheat to {preheat_temp}°C... Press ENTER when beans are dropped.")
