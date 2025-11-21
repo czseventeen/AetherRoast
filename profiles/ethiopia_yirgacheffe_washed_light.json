@@ -1,0 +1,23 @@
+{
+  "name": "Ethiopia Yirgacheffe Washed Light Roast",
+  "description": "Light Roast to bring out Jasonmine, bergamot, lemon peel aromatics, Honey+Peach sweetness, light silky body and clean finish",
+  "pid_gains": [2.3, 0.25, 2.8],
+  "pwm_period": 0.5,
+  "preheat": {
+    "temp_c": 200
+  },
+  "roast_profile": [
+    [0, 25],
+    [60, 82],
+    [120, 113],
+    [180, 135],
+    [240, 149],
+    [285, 160],
+    [360, 171],
+    [420, 179],
+    [480, 188],
+    [510, 193],
+    [540, 197],
+    [560, 202]
+  ]
+}
