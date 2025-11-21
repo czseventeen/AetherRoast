@@ -31,5 +31,8 @@ def reset_roast_stage(current_time):
     _stage_start_time = current_time
 
 def format_elapsed_time(elapsed_seconds):
-    """Format elapsed time as MM:SS"""
-    return time.strftime("%M:%S", time.gmtime(elapsed_seconds))
+    """Format elapsed time as MM:SS.mmm"""
+    minutes = int(elapsed_seconds // 60)
+    seconds = int(elapsed_seconds % 60)
+    milliseconds = int((elapsed_seconds % 1) * 1000)
+    return f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"

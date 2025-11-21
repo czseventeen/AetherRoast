@@ -20,9 +20,9 @@ class RoastLogger:
             self.log_fh.write(f"# Profile: {self.profile_name}\n")
         
         self.csv_writer.writerow([
-            "elapsed_mmss",
+            "elapsed_mmss_mmm",
             "stage",
-            "stage_duration_mmss",
+            "stage_duration_mmss_mmm",
             "target_temp_C",
             "actual_temp_C",
             "pid_on_time_s"
@@ -30,10 +30,11 @@ class RoastLogger:
     
     def log_step(self, elapsed, stage, stage_duration, target_temp, actual_temp, on_time):
         """Log a single roasting step"""
-        mmss = time.strftime("%M:%S", time.gmtime(elapsed))
-        stage_mmss = time.strftime("%M:%S", time.gmtime(stage_duration))
+        from utils.helpers import format_elapsed_time
+        mmss_mmm = format_elapsed_time(elapsed)
+        stage_mmss_mmm = format_elapsed_time(stage_duration)
         self.csv_writer.writerow([
-            mmss, stage, stage_mmss, round(target_temp, 1), round(actual_temp, 2), round(on_time, 2)
+            mmss_mmm, stage, stage_mmss_mmm, round(target_temp, 1), round(actual_temp, 2), round(on_time, 2)
         ])
         self.log_fh.flush()
     
