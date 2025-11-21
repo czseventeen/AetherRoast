@@ -1,7 +1,7 @@
 {
   "name": "Colombia Huila Medium Roast",
   "description": "Balanced roast with caramelized sweetness and mild acidity.",
-  "pid_gains": [2.0, 0.3, 2.2],
+  "pid_gains": [2.0, 0.3, 2.8],
   "pwm_period": 0.5,
   "preheat": {
     "temp_c": 180
