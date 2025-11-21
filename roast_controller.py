@@ -18,22 +18,23 @@ class RoastController:
             pwm_period=self.profile.pwm_period,
             pid_gains=self.profile.pid_gains
         )
-        self.logger = RoastLogger(log_file)
+        self.logger = RoastLogger(log_file, self.profile.name)
         self.fan = FanController()
         
         self.running = False
         self.start_time = None
+        self.roast_start_time = None
         self.preheat_complete = False
         self.temp_offset = 0.0
         self.manual_fan_speed = None
     
     def control_step(self):
         """Execute one control step"""
-        elapsed = time.time() - self.start_time if self.start_time else 0
+        roast_elapsed = time.time() - self.roast_start_time if self.roast_start_time else 0
         
         # Update setpoint from profile if available
         if self.profile.profile_data:
-            base_target = self.profile.interpolate_setpoint(elapsed)
+            base_target = self.profile.interpolate_setpoint(roast_elapsed)
             target_temp = base_target + self.temp_offset
             self.temp_controller.set_target(target_temp)
         
@@ -43,22 +44,29 @@ class RoastController:
         stage = get_roast_stage(current_temp)
         
         # Console output
-        mmss = format_elapsed_time(elapsed)
+        mmss = format_elapsed_time(roast_elapsed)
         print(f"\rElapsed: {mmss} | Stage: {stage} | Temp: {current_temp:.2f}°C | "
               f"Target: {self.temp_controller.setpoint:.2f}°C | SSR ON: {on_time:.2f}s")
         
         # Log data
-        self.logger.log_step(elapsed, stage, self.temp_controller.setpoint, current_temp, on_time)
+        self.logger.log_step(roast_elapsed, stage, self.temp_controller.setpoint, current_temp, on_time)
         
         # Control SSR
         self.ssr.control_output(on_time)
     
     def preheat_step(self, target_temp):
         """Execute one preheat control step"""
+        elapsed = time.time() - self.start_time if self.start_time else 0
         current_temp = self.temp_controller.read_temperature()
         on_time = self.temp_controller.calculate_output(current_temp)
         
-        print(f"Preheat | Temp: {current_temp:.2f}°C | Target: {target_temp:.1f}°C | SSR ON: {on_time:.2f}s")
+        # Console output
+        mmss = format_elapsed_time(elapsed)
+        print(f"\rElapsed: {mmss} | Stage: Preheating | Temp: {current_temp:.2f}°C | "
+              f"Target: {target_temp:.1f}°C | SSR ON: {on_time:.2f}s")
+        
+        # Log preheat data
+        self.logger.log_step(elapsed, "Preheating", target_temp, current_temp, on_time)
         
         self.ssr.control_output(on_time)
         return current_temp >= target_temp - 2.0  # Within 2°C tolerance
@@ -75,8 +83,10 @@ class RoastController:
             # Start roasting phase only if still running
             if not self.running:
                 return
+            
+            # Start roast timer when beans drop
+            self.roast_start_time = time.time()
                 
-            self.start_time = time.time()
             reset_roast_stage()  # Reset stage tracking for new roast
             self.fan.set_speed(100)  # Set fan to 100% for roasting
             print(f"[INFO] Starting roast phase for '{self.profile.name}'")
@@ -102,6 +112,9 @@ class RoastController:
         self.temp_controller.set_target(preheat_temp)
         self.fan.set_speed(100)  # Start fan at 100% for heating
         print(f"[INFO] Starting preheat to {preheat_temp}°C... Press ENTER when beans are dropped.")
+        
+        # Start timing from preheat
+        self.start_time = time.time()
         
         # Start bean drop thread
         input_thread = threading.Thread(target=self.wait_for_bean_drop)
