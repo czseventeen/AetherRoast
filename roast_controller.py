@@ -5,7 +5,7 @@ from controller.ssr import SSRController
 from controller.temperature import TemperatureController
 from controller.fan import FanController
 from utils.logging import RoastLogger
-from utils.helpers import get_roast_stage, format_elapsed_time, reset_roast_stage
+from utils.helpers import get_roast_stage, get_stage_duration, advance_roast_stage, format_elapsed_time, reset_roast_stage
 from profiles.profile_loader import RoastProfile
 
 class RoastController:
@@ -41,15 +41,17 @@ class RoastController:
         # Read temperature and calculate output
         current_temp = self.temp_controller.read_temperature()
         on_time = self.temp_controller.calculate_output(current_temp)
-        stage = get_roast_stage(current_temp)
+        stage = get_roast_stage()
+        stage_duration = get_stage_duration(time.time())
         
         # Console output
         mmss = format_elapsed_time(roast_elapsed)
-        print(f"\rElapsed: {mmss} | Stage: {stage} | Temp: {current_temp:.2f}°C | "
+        stage_mmss = format_elapsed_time(stage_duration)
+        print(f"\rElapsed: {mmss} | Stage: {stage} ({stage_mmss}) | Temp: {current_temp:.2f}°C | "
               f"Target: {self.temp_controller.setpoint:.2f}°C | SSR ON: {on_time:.2f}s")
         
         # Log data
-        self.logger.log_step(roast_elapsed, stage, self.temp_controller.setpoint, current_temp, on_time)
+        self.logger.log_step(roast_elapsed, stage, stage_duration, self.temp_controller.setpoint, current_temp, on_time)
         
         # Control SSR
         self.ssr.control_output(on_time)
@@ -62,11 +64,11 @@ class RoastController:
         
         # Console output
         mmss = format_elapsed_time(elapsed)
-        print(f"\rElapsed: {mmss} | Stage: Preheating | Temp: {current_temp:.2f}°C | "
+        print(f"\rElapsed: {mmss} | Stage: Preheating ({mmss}) | Temp: {current_temp:.2f}°C | "
               f"Target: {target_temp:.1f}°C | SSR ON: {on_time:.2f}s")
         
-        # Log preheat data
-        self.logger.log_step(elapsed, "Preheating", target_temp, current_temp, on_time)
+        # Log preheat data (no stage duration for preheating)
+        self.logger.log_step(elapsed, "Preheating", elapsed, target_temp, current_temp, on_time)
         
         self.ssr.control_output(on_time)
         return current_temp >= target_temp - 2.0  # Within 2°C tolerance
@@ -87,10 +89,10 @@ class RoastController:
             # Start roast timer when beans drop
             self.roast_start_time = time.time()
                 
-            reset_roast_stage()  # Reset stage tracking for new roast
+            reset_roast_stage(time.time())  # Reset stage tracking for new roast
             self.fan.set_speed(100)  # Set fan to 100% for roasting
             print(f"[INFO] Starting roast phase for '{self.profile.name}'")
-            print(f"[INFO] Controls: 1-9=Fan%, 0=100%, +/-=Temp±5°C, r=Reset, q=Quit")
+            print(f"[INFO] Controls: 1-9=Fan%, 0=100%, +/-=Temp±5°C, ENTER=Next Stage, r=Reset, q=Quit")
             
             # Start keyboard thread for roast controls
             keyboard_thread = threading.Thread(target=self.keyboard_loop)
@@ -154,7 +156,11 @@ class RoastController:
                     if ord(key) == 3:  # Ctrl+C
                         self.shutdown()
                         break
-                    self.handle_keypress(key)
+                    elif ord(key) == 13:  # ENTER
+                        new_stage = advance_roast_stage(time.time())
+                        print(f"\n[STAGE] Advanced to: {new_stage}")
+                    else:
+                        self.handle_keypress(key)
         except:
             pass
         finally:
