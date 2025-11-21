@@ -3,8 +3,12 @@
   "description": "Balanced roast with caramelized sweetness and mild acidity.",
   "pid_gains": [2.0, 0.3, 2.2],
   "pwm_period": 0.5,
+  "preheat": {
+    "temp_c": 180
+  },
   "roast_profile": [
-    [0, 137],
+    [0, 25],
+    [60, 110],
     [120, 145],
     [180, 170],
     [240, 190],

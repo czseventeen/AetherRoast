@@ -21,13 +21,9 @@ class RoastProfile:
         self.description = data.get("description", "")
         self.pid_gains = tuple(data.get("pid_gains", [2.3, 0.25, 2.5]))
         self.pwm_period = data.get("pwm_period", 0.5)
+        self.preheat = data.get("preheat")
         self.profile_data = [(float(point[0]), float(point[1])) for point in data["roast_profile"]]
         
-        # Use time=0 temperature as preheat target only if profile starts at time=0
-        self.preheat_temp = None
-        if self.profile_data and self.profile_data[0][0] == 0:
-            self.preheat_temp = self.profile_data[0][1]
-
         self.profile_data.sort(key=lambda x: x[0])
         print(f"[INFO] Loaded profile '{self.name}': {len(self.profile_data)} points")
     
