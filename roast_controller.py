@@ -44,13 +44,7 @@ class RoastController:
         stage = get_roast_stage()
         stage_duration = get_stage_duration(time.time())
         
-        # Console output
-        mmss = format_elapsed_time(roast_elapsed)
-        stage_mmss = format_elapsed_time(stage_duration)
-        print(f"\rElapsed: {mmss} | Stage: {stage} ({stage_mmss}) | Temp: {current_temp:.2f}°C | "
-              f"Target: {self.temp_controller.setpoint:.2f}°C | SSR ON: {on_time:.2f}s")
-        
-        # Log data
+        # Console output and log data
         self.logger.log_step(roast_elapsed, stage, stage_duration, self.temp_controller.setpoint, current_temp, on_time)
         
         # Control SSR
@@ -62,12 +56,7 @@ class RoastController:
         current_temp = self.temp_controller.read_temperature()
         on_time = self.temp_controller.calculate_output(current_temp)
         
-        # Console output
-        mmss = format_elapsed_time(elapsed)
-        print(f"\rElapsed: {mmss} | Stage: Preheating ({mmss}) | Temp: {current_temp:.2f}°C | "
-              f"Target: {target_temp:.1f}°C | SSR ON: {on_time:.2f}s")
-        
-        # Log preheat data (no stage duration for preheating)
+        # Console output and log preheat data
         self.logger.log_step(elapsed, "Preheating", elapsed, target_temp, current_temp, on_time)
         
         self.ssr.control_output(on_time)

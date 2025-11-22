@@ -28,11 +28,18 @@ class RoastLogger:
             "pid_on_time_s"
         ])
     
-    def log_step(self, elapsed, stage, stage_duration, target_temp, actual_temp, on_time):
-        """Log a single roasting step"""
+    def log_step(self, elapsed, stage, stage_duration, target_temp, actual_temp, on_time, show_console=True):
+        """Log a single roasting step and optionally display to console"""
         from utils.helpers import format_elapsed_time
         mmss_mmm = format_elapsed_time(elapsed)
         stage_mmss_mmm = format_elapsed_time(stage_duration)
+
+        # Console output
+        if show_console:
+            print(f"\rElapsed: {mmss_mmm} | Stage: {stage} ({stage_mmss_mmm}) | Temp: {actual_temp:.2f}°C | "
+                  f"Target: {target_temp:.1f}°C | SSR ON: {on_time:.2f}s")
+
+        # File logging
         self.csv_writer.writerow([
             mmss_mmm, stage, stage_mmss_mmm, round(target_temp, 1), round(actual_temp, 2), round(on_time, 2)
         ])
