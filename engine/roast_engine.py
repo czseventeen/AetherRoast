@@ -55,6 +55,8 @@ STAGE_EVENT_LABELS = {
     "drop": "Drop",
 }
 
+ROR_DISPLAY_WARMUP_S = 30.0
+
 
 class RoastEngine:
     def __init__(self, ssr_pin=26, log_file="roast_log.csv"):
@@ -142,6 +144,7 @@ class RoastEngine:
             self.stage_label = "Drying"
             self.stage_start_time = now
             self.state = RoastState.ROASTING
+            self._ror_c_per_min = None
             self._pending_event_marker = "bean_drop"
             self._last_event_marker = "bean_drop"
             self._last_event_elapsed_s = self._compute_elapsed(now)
@@ -310,7 +313,8 @@ class RoastEngine:
 
         current_temp = self.temp_controller.read_temperature()
         now = time.time()
-        ror = self._compute_ror(now, current_temp)
+        # RoR is not meaningful before bean drop.
+        ror = None
         on_time = self.temp_controller.calculate_output(current_temp)
 
         with self._lock:
@@ -352,7 +356,8 @@ class RoastEngine:
 
         current_temp = self.temp_controller.read_temperature()
         now = time.time()
-        ror = self._compute_ror(now, current_temp)
+        # RoR is not meaningful before bean drop.
+        ror = None
         on_time = self.temp_controller.calculate_output(current_temp)
 
         with self._lock:
@@ -400,7 +405,8 @@ class RoastEngine:
             stage_elapsed = self._compute_stage_elapsed(now)
             self._actual_temp_c = current_temp
             self._heater_on_time_s = on_time
-            self._ror_c_per_min = ror
+            # Hide RoR on UI/chart during early post-drop transient.
+            self._ror_c_per_min = None if roast_elapsed < ROR_DISPLAY_WARMUP_S else ror
             marker = self._consume_pending_event_marker_unlocked()
             if self.logger:
                 self.logger.log_step(
@@ -410,6 +416,7 @@ class RoastEngine:
                     self._target_temp_c,
                     current_temp,
                     on_time,
+                    # Keep logging real RoR even while UI RoR is temporarily hidden.
                     ror_c_per_min=ror,
                     event_marker=marker,
                 )
