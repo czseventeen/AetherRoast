@@ -62,6 +62,21 @@ button.danger {
   color: #fff;
 }
 
+.top-controls {
+  align-items: stretch;
+}
+
+.large-btn {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 12px 18px;
+  min-width: 120px;
+}
+
+.emergency-btn {
+  min-width: 210px;
+}
+
 .metrics {
   display: grid;
   gap: 8px;
@@ -91,12 +106,42 @@ button.danger {
   font-size: 13px;
 }
 
+.chart-and-side {
+  display: grid;
+  grid-template-columns: 1fr 230px;
+  gap: 12px;
+  align-items: start;
+}
+
 .chart-panel {
-  min-height: 300px;
+  min-height: 360px;
+}
+
+.side-controls h3,
+.stage-panel h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+}
+
+.side-controls .buttons,
+.stage-panel .buttons {
+  margin-bottom: 0;
 }
 
 @media (max-width: 700px) {
   .metric strong {
     font-size: 18px;
+  }
+
+  .chart-and-side {
+    grid-template-columns: 1fr;
+  }
+
+  .large-btn {
+    width: 100%;
+  }
+
+  .emergency-btn {
+    min-width: 0;
   }
 }
