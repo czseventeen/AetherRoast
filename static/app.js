@@ -82,7 +82,9 @@ const roastChart = new Chart(ctx, {
 
 function formatElapsed(seconds) {
   const whole = Math.floor(Number(seconds) || 0);
-  return `${whole}s`;
+  const minutes = Math.floor(whole / 60);
+  const secs = whole % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 function setStatus(text, isError = false) {
