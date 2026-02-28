@@ -82,6 +82,21 @@ function setStatus(text, isError = false) {
   statusLine.style.color = isError ? '#a43f2e' : '#2b2419';
 }
 
+function saveGraphSnapshot() {
+  const nowIso = new Date().toISOString().replace(/[:.]/g, '-');
+  const profileName = (profileSelect.value || 'profile')
+    .replace(/\.json$/i, '')
+    .replace(/[^a-z0-9_-]+/gi, '_')
+    .replace(/^_+|_+$/g, '') || 'profile';
+  const filename = `${profileName}-${nowIso}-graph.png`;
+
+  roastChart.update('none');
+  const link = document.createElement('a');
+  link.href = roastChart.toBase64Image('image/png', 1);
+  link.download = filename;
+  link.click();
+}
+
 async function api(path, method = 'GET', body = null) {
   const resp = await fetch(path, {
     method,
@@ -226,6 +241,15 @@ function wireButtons() {
 
   document.getElementById('downloadCsvBtn').addEventListener('click', () => {
     window.location.href = '/api/session/csv';
+  });
+
+  document.getElementById('saveGraphBtn').addEventListener('click', () => {
+    try {
+      saveGraphSnapshot();
+      setStatus('Graph snapshot saved');
+    } catch (err) {
+      setStatus(`Failed to save graph snapshot: ${err.message}`, true);
+    }
   });
 
   document.querySelectorAll('button[data-stage]').forEach((btn) => {
