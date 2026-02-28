@@ -90,6 +90,8 @@ class RoastEngine:
         self._last_event_elapsed_s: Optional[float] = None
         self._did_reduce_preheat_fan = False
         self._is_cleaned_up = True
+        self._last_elapsed_s = 0.0
+        self._last_stage_elapsed_s = 0.0
 
         self._ror_samples: deque[tuple[float, float]] = deque()
         self._last_ror_sample_ts = 0.0
@@ -246,6 +248,8 @@ class RoastEngine:
         self._last_event_elapsed_s = None
         self._did_reduce_preheat_fan = False
         self._is_cleaned_up = False
+        self._last_elapsed_s = 0.0
+        self._last_stage_elapsed_s = 0.0
 
         self._ror_samples.clear()
         self._last_ror_sample_ts = 0.0
@@ -445,14 +449,20 @@ class RoastEngine:
             return slope_c_per_s * 60.0
 
     def _compute_elapsed(self, now: float) -> float:
-        if not self.session_start_time:
-            return 0.0
-        return max(0.0, now - self.session_start_time)
+        if self.state in (RoastState.PREHEATING, RoastState.READY_FOR_BEAN_DROP, RoastState.ROASTING):
+            if not self.session_start_time:
+                self._last_elapsed_s = 0.0
+            else:
+                self._last_elapsed_s = max(0.0, now - self.session_start_time)
+        return self._last_elapsed_s
 
     def _compute_stage_elapsed(self, now: float) -> float:
-        if not self.stage_start_time:
-            return 0.0
-        return max(0.0, now - self.stage_start_time)
+        if self.state in (RoastState.PREHEATING, RoastState.READY_FOR_BEAN_DROP, RoastState.ROASTING):
+            if not self.stage_start_time:
+                self._last_stage_elapsed_s = 0.0
+            else:
+                self._last_stage_elapsed_s = max(0.0, now - self.stage_start_time)
+        return self._last_stage_elapsed_s
 
     def _consume_pending_event_marker_unlocked(self) -> Optional[str]:
         marker = self._pending_event_marker
