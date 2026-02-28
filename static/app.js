@@ -12,6 +12,8 @@ const rorVal = document.getElementById('rorVal');
 const ctx = document.getElementById('roastChart');
 const stageEvents = [];
 const seenEventKeys = new Set();
+const UI_UPDATE_INTERVAL_MS = 1000;
+let lastUiUpdateMs = 0;
 const chartData = {
   datasets: [
     { label: 'Temperature (C)', data: [], borderColor: '#c14f2a', yAxisID: 'yTemp', tension: 0.2, pointRadius: 0 },
@@ -70,11 +72,8 @@ const roastChart = new Chart(ctx, {
 });
 
 function formatElapsed(seconds) {
-  const whole = Math.floor(seconds || 0);
-  const ms = Math.floor(((seconds || 0) % 1) * 1000);
-  const m = Math.floor(whole / 60);
-  const s = whole % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+  const whole = Math.floor(Number(seconds) || 0);
+  return `${whole}s`;
 }
 
 function setStatus(text, isError = false) {
@@ -168,7 +167,13 @@ function registerStageEvent(marker, elapsedSeconds) {
   });
 }
 
-function updateSnapshot(snapshot) {
+function updateSnapshot(snapshot, force = false) {
+  const nowMs = Date.now();
+  if (!force && nowMs - lastUiUpdateMs < UI_UPDATE_INTERVAL_MS) {
+    return;
+  }
+  lastUiUpdateMs = nowMs;
+
   stateVal.textContent = snapshot.state;
   elapsedVal.textContent = formatElapsed(snapshot.elapsed_s);
   stageVal.textContent = snapshot.stage_label;
@@ -309,7 +314,7 @@ function connectWs() {
   try {
     await loadProfiles();
     const snapshot = await api('/api/session');
-    updateSnapshot(snapshot);
+    updateSnapshot(snapshot, true);
   } catch (err) {
     setStatus(err.message, true);
   }
