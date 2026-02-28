@@ -4,6 +4,7 @@ const statusLine = document.getElementById('statusLine');
 const stateVal = document.getElementById('stateVal');
 const elapsedVal = document.getElementById('elapsedVal');
 const stageVal = document.getElementById('stageVal');
+const stageElapsedVal = document.getElementById('stageElapsedVal');
 const tempVal = document.getElementById('tempVal');
 const targetVal = document.getElementById('targetVal');
 const rorVal = document.getElementById('rorVal');
@@ -156,6 +157,7 @@ function updateSnapshot(snapshot) {
   stateVal.textContent = snapshot.state;
   elapsedVal.textContent = formatElapsed(snapshot.elapsed_s);
   stageVal.textContent = snapshot.stage_label;
+  stageElapsedVal.textContent = formatElapsed(snapshot.stage_elapsed_s);
   tempVal.textContent = Number(snapshot.actual_temp_c || 0).toFixed(2);
   targetVal.textContent = Number(snapshot.target_temp_c || 0).toFixed(2);
   rorVal.textContent = snapshot.ror_c_per_min == null ? 'n/a' : Number(snapshot.ror_c_per_min).toFixed(2);
