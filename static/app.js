@@ -9,21 +9,59 @@ const targetVal = document.getElementById('targetVal');
 const rorVal = document.getElementById('rorVal');
 
 const ctx = document.getElementById('roastChart');
+const stageEvents = [];
+const seenEventKeys = new Set();
 const chartData = {
-  labels: [],
   datasets: [
     { label: 'Temperature (C)', data: [], borderColor: '#c14f2a', yAxisID: 'yTemp', tension: 0.2, pointRadius: 0 },
     { label: 'RoR (C/min)', data: [], borderColor: '#1d6b5f', yAxisID: 'yRor', tension: 0.2, pointRadius: 0 }
   ]
 };
 
+const stageMarkerPlugin = {
+  id: 'stageMarkerPlugin',
+  afterDatasetsDraw(chart) {
+    const { ctx: canvasCtx, chartArea, scales } = chart;
+    const xScale = scales.x;
+    if (!xScale || stageEvents.length === 0) {
+      return;
+    }
+
+    canvasCtx.save();
+    canvasCtx.strokeStyle = '#7f5539';
+    canvasCtx.fillStyle = '#7f5539';
+    canvasCtx.lineWidth = 1;
+    canvasCtx.font = '11px Segoe UI';
+
+    for (const evt of stageEvents) {
+      const x = xScale.getPixelForValue(evt.t);
+      if (x < chartArea.left || x > chartArea.right) {
+        continue;
+      }
+      canvasCtx.beginPath();
+      canvasCtx.moveTo(x, chartArea.top);
+      canvasCtx.lineTo(x, chartArea.bottom);
+      canvasCtx.stroke();
+
+      canvasCtx.save();
+      canvasCtx.translate(x + 3, chartArea.top + 8);
+      canvasCtx.rotate(-Math.PI / 2);
+      canvasCtx.fillText(`${evt.label} (${evt.deltaLabel})`, 0, 0);
+      canvasCtx.restore();
+    }
+    canvasCtx.restore();
+  }
+};
+
 const roastChart = new Chart(ctx, {
   type: 'line',
   data: chartData,
+  plugins: [stageMarkerPlugin],
   options: {
     responsive: true,
     animation: false,
     scales: {
+      x: { type: 'linear', title: { display: true, text: 'Elapsed (s)' } },
       yTemp: { type: 'linear', position: 'left', title: { display: true, text: 'Temp C' } },
       yRor: { type: 'linear', position: 'right', title: { display: true, text: 'RoR C/min' }, grid: { drawOnChartArea: false } }
     }
@@ -72,16 +110,46 @@ function pushChartPoint(snapshot) {
   const temp = Number(snapshot.actual_temp_c || 0);
   const ror = snapshot.ror_c_per_min == null ? null : Number(snapshot.ror_c_per_min);
 
-  chartData.labels.push(t.toFixed(1));
-  chartData.datasets[0].data.push(temp);
-  chartData.datasets[1].data.push(ror);
+  chartData.datasets[0].data.push({ x: t, y: temp });
+  chartData.datasets[1].data.push({ x: t, y: ror });
 
-  if (chartData.labels.length > 4000) {
-    chartData.labels.shift();
+  if (chartData.datasets[0].data.length > 4000) {
     chartData.datasets[0].data.shift();
     chartData.datasets[1].data.shift();
   }
-  roastChart.update('none');
+}
+
+function stageKeyToLabel(key) {
+  const labels = {
+    bean_drop: 'Bean Drop',
+    dry_end: 'Dry End',
+    maillard: 'Maillard',
+    first_crack_start: '1C Start',
+    first_crack_end: '1C End',
+    second_crack_start: '2C Start',
+    second_crack_end: '2C End',
+    drop: 'Drop'
+  };
+  return labels[key] || key;
+}
+
+function registerStageEvent(marker, elapsedSeconds) {
+  if (!marker || elapsedSeconds == null) {
+    return;
+  }
+  const t = Number(elapsedSeconds);
+  const key = `${marker}@${t.toFixed(2)}`;
+  if (seenEventKeys.has(key)) {
+    return;
+  }
+  seenEventKeys.add(key);
+  const prev = stageEvents.length ? stageEvents[stageEvents.length - 1].t : null;
+  const delta = prev == null ? t : (t - prev);
+  stageEvents.push({
+    t,
+    label: stageKeyToLabel(marker),
+    deltaLabel: formatElapsed(delta)
+  });
 }
 
 function updateSnapshot(snapshot) {
@@ -92,9 +160,14 @@ function updateSnapshot(snapshot) {
   targetVal.textContent = Number(snapshot.target_temp_c || 0).toFixed(2);
   rorVal.textContent = snapshot.ror_c_per_min == null ? 'n/a' : Number(snapshot.ror_c_per_min).toFixed(2);
 
+  if (snapshot.last_event_marker && snapshot.last_event_elapsed_s != null) {
+    registerStageEvent(snapshot.last_event_marker, snapshot.last_event_elapsed_s);
+  }
+
   if (snapshot.state === 'ROASTING' || snapshot.state === 'PREHEATING' || snapshot.state === 'READY_FOR_BEAN_DROP') {
     pushChartPoint(snapshot);
   }
+  roastChart.update('none');
 }
 
 function wireButtons() {
@@ -109,9 +182,10 @@ function wireButtons() {
 
   document.getElementById('startBtn').addEventListener('click', async () => {
     try {
-      chartData.labels = [];
       chartData.datasets[0].data = [];
       chartData.datasets[1].data = [];
+      stageEvents.length = 0;
+      seenEventKeys.clear();
       roastChart.update('none');
       const profile_file = profileSelect.value;
       const res = await api('/api/session/start', 'POST', { profile_file });

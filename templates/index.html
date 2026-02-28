@@ -38,20 +38,8 @@
       <div class="metric"><span>RoR (C/min)</span><strong id="rorVal">n/a</strong></div>
     </section>
 
-    <section class="panel chart-and-side">
-      <div class="chart-panel">
-        <canvas id="roastChart"></canvas>
-      </div>
-      <aside class="side-controls">
-        <h3>Fan / Temp</h3>
-        <div class="row buttons">
-          <button data-fan="20">Fan 20%</button>
-          <button data-fan="50">Fan 50%</button>
-          <button data-fan="100">Fan 100%</button>
-          <button data-delta="5">Temp +5C</button>
-          <button data-delta="-5">Temp -5C</button>
-        </div>
-      </aside>
+    <section class="panel chart-panel">
+      <canvas id="roastChart"></canvas>
     </section>
 
     <section class="panel stage-panel">
@@ -65,6 +53,17 @@
         <button data-stage="second_crack_start">Second Crack Start</button>
         <button data-stage="second_crack_end">Second Crack End</button>
         <button data-stage="drop">Drop</button>
+      </div>
+    </section>
+
+    <section class="panel controls-panel">
+      <h3>Fan / Temp Controls</h3>
+      <div class="row buttons">
+        <button data-fan="20">Fan 20%</button>
+        <button data-fan="50">Fan 50%</button>
+        <button data-fan="100">Fan 100%</button>
+        <button data-delta="5">Temp +5C</button>
+        <button data-delta="-5">Temp -5C</button>
       </div>
     </section>
   </main>

@@ -40,6 +40,8 @@ class RoastSnapshot:
     heater_on_time_s: float = 0.0
     profile_name: str = ""
     fault_message: Optional[str] = None
+    last_event_marker: Optional[str] = None
+    last_event_elapsed_s: Optional[float] = None
     ts_epoch: float = 0.0
 
 
@@ -84,6 +86,8 @@ class RoastEngine:
         self._heater_on_time_s = 0.0
         self._ror_c_per_min: Optional[float] = None
         self._pending_event_marker: Optional[str] = None
+        self._last_event_marker: Optional[str] = None
+        self._last_event_elapsed_s: Optional[float] = None
         self._did_reduce_preheat_fan = False
         self._is_cleaned_up = True
 
@@ -111,6 +115,8 @@ class RoastEngine:
                 heater_on_time_s=self._heater_on_time_s,
                 profile_name=self.profile.name if self.profile else "",
                 fault_message=self.fault_message,
+                last_event_marker=self._last_event_marker,
+                last_event_elapsed_s=self._last_event_elapsed_s,
                 ts_epoch=now,
             )
 
@@ -135,6 +141,8 @@ class RoastEngine:
             self.stage_start_time = now
             self.state = RoastState.ROASTING
             self._pending_event_marker = "bean_drop"
+            self._last_event_marker = "bean_drop"
+            self._last_event_elapsed_s = self._compute_elapsed(now)
             if self.fan:
                 self.fan.set_speed(100)
             return CommandResult(True, "Bean drop accepted, roast started")
@@ -149,6 +157,8 @@ class RoastEngine:
             self.stage_label = STAGE_EVENT_LABELS[stage]
             self.stage_start_time = now
             self._pending_event_marker = stage
+            self._last_event_marker = stage
+            self._last_event_elapsed_s = self._compute_elapsed(now)
             return CommandResult(True, f"Stage marked: {self.stage_label}")
 
     def set_fan(self, percent: int) -> CommandResult:
@@ -232,6 +242,8 @@ class RoastEngine:
         self._heater_on_time_s = 0.0
         self._ror_c_per_min = None
         self._pending_event_marker = None
+        self._last_event_marker = None
+        self._last_event_elapsed_s = None
         self._did_reduce_preheat_fan = False
         self._is_cleaned_up = False
 
@@ -250,6 +262,8 @@ class RoastEngine:
             self.roast_start_time = now
             self.fan.set_speed(100)
             self._pending_event_marker = "bean_drop"
+            self._last_event_marker = "bean_drop"
+            self._last_event_elapsed_s = self._compute_elapsed(now)
 
         self._publish_snapshot_unlocked()
 
