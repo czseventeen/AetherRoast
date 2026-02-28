@@ -19,8 +19,27 @@
         <label for="profileSelect">Profile</label>
         <select id="profileSelect"></select>
         <button id="refreshProfiles">Refresh</button>
+        <button id="previewProfileBtn">Preview Profile</button>
         <button id="downloadCsvBtn">Download CSV</button>
         <button id="saveGraphBtn">Save Graph</button>
+      </div>
+      <div id="profileModal" class="modal-overlay hidden" hidden role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 id="profileModalTitle">Profile Preview</h3>
+            <button id="closeProfileModalBtn" class="modal-close" type="button">Close</button>
+          </div>
+          <textarea id="profileEditor" class="profile-editor" spellcheck="false" readonly></textarea>
+          <div class="row save-as-row">
+            <label for="saveAsNameInput">Save As</label>
+            <input id="saveAsNameInput" type="text" placeholder="new_profile.json">
+            <button id="saveAsProfileBtn" type="button">Save As</button>
+          </div>
+          <div class="row buttons modal-actions">
+            <button id="editProfileBtn" type="button">Edit</button>
+            <button id="saveProfileBtn" type="button" disabled>Save</button>
+          </div>
+        </div>
       </div>
       <div class="row buttons top-controls">
         <button id="startBtn" class="primary large-btn">Start</button>

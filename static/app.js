@@ -1,4 +1,12 @@
 const profileSelect = document.getElementById('profileSelect');
+const profileEditor = document.getElementById('profileEditor');
+const profileModal = document.getElementById('profileModal');
+const profileModalTitle = document.getElementById('profileModalTitle');
+const closeProfileModalBtn = document.getElementById('closeProfileModalBtn');
+const editProfileBtn = document.getElementById('editProfileBtn');
+const saveProfileBtn = document.getElementById('saveProfileBtn');
+const saveAsNameInput = document.getElementById('saveAsNameInput');
+const saveAsProfileBtn = document.getElementById('saveAsProfileBtn');
 const statusLine = document.getElementById('statusLine');
 
 const stateVal = document.getElementById('stateVal');
@@ -14,6 +22,7 @@ const stageEvents = [];
 const seenEventKeys = new Set();
 const UI_UPDATE_INTERVAL_MS = 1000;
 let lastUiUpdateMs = 0;
+let profileModalFile = '';
 const chartData = {
   datasets: [
     { label: 'Temperature (C)', data: [], borderColor: '#c14f2a', yAxisID: 'yTemp', tension: 0.2, pointRadius: 0 },
@@ -110,14 +119,96 @@ async function api(path, method = 'GET', body = null) {
 }
 
 async function loadProfiles() {
+  const selectedBeforeRefresh = profileSelect.value;
   const profiles = await api('/api/profiles');
   profileSelect.innerHTML = '';
+  let restoredSelection = false;
   for (const p of profiles) {
     const opt = document.createElement('option');
     opt.value = p.file;
     opt.textContent = `${p.name} (${p.file})`;
+    if (p.file === selectedBeforeRefresh) {
+      opt.selected = true;
+      restoredSelection = true;
+    }
     profileSelect.appendChild(opt);
   }
+  if (!restoredSelection && profileSelect.options.length > 0) {
+    profileSelect.selectedIndex = 0;
+  }
+}
+
+async function previewSelectedProfile() {
+  const profileFile = profileSelect.value;
+  if (!profileFile) {
+    profileEditor.value = '';
+    throw new Error('No profile selected');
+  }
+  const payload = await api(`/api/profiles/${encodeURIComponent(profileFile)}`);
+  profileEditor.value = payload.content || '';
+  return payload.file || profileFile;
+}
+
+function setProfileEditMode(editEnabled) {
+  profileEditor.readOnly = !editEnabled;
+  saveProfileBtn.disabled = !editEnabled;
+  editProfileBtn.disabled = editEnabled;
+  profileModalTitle.textContent = editEnabled ? `Edit Profile: ${profileModalFile}` : `Profile Preview: ${profileModalFile}`;
+}
+
+function defaultSaveAsName(profileFile) {
+  if (!profileFile) {
+    return 'new_profile.json';
+  }
+  const base = profileFile.replace(/\.json$/i, '');
+  return `${base}_copy.json`;
+}
+
+function openProfileModal(fileName) {
+  profileModalFile = fileName;
+  setProfileEditMode(false);
+  saveAsNameInput.value = defaultSaveAsName(fileName);
+  profileModal.hidden = false;
+  profileModal.classList.remove('hidden');
+}
+
+function closeProfileModal() {
+  profileModal.hidden = true;
+  profileModal.classList.add('hidden');
+  profileModalFile = '';
+  profileEditor.value = '';
+  saveAsNameInput.value = '';
+}
+
+async function saveSelectedProfile() {
+  const profileFile = profileModalFile || profileSelect.value;
+  if (!profileFile) {
+    throw new Error('No profile selected');
+  }
+  const res = await api(`/api/profiles/${encodeURIComponent(profileFile)}`, 'PUT', {
+    content: profileEditor.value
+  });
+  await loadProfiles();
+  profileSelect.value = profileFile;
+  await previewSelectedProfile();
+  return res;
+}
+
+async function saveProfileAs() {
+  const fileName = (saveAsNameInput.value || '').trim();
+  if (!fileName) {
+    throw new Error('Please enter a new profile file name');
+  }
+  const res = await api('/api/profiles/save-as', 'POST', {
+    file_name: fileName,
+    content: profileEditor.value
+  });
+  const newFile = res.file || fileName;
+  await loadProfiles();
+  profileSelect.value = newFile;
+  const loadedFile = await previewSelectedProfile();
+  openProfileModal(loadedFile);
+  return res;
 }
 
 function pushChartPoint(snapshot) {
@@ -255,6 +346,72 @@ function wireButtons() {
     } catch (err) {
       setStatus(`Failed to save graph snapshot: ${err.message}`, true);
     }
+  });
+
+  document.getElementById('previewProfileBtn').addEventListener('click', async () => {
+    try {
+      const fileName = await previewSelectedProfile();
+      openProfileModal(fileName);
+      setStatus(`Profile loaded: ${fileName}`);
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+
+  saveProfileBtn.addEventListener('click', async () => {
+    try {
+      const res = await saveSelectedProfile();
+      setProfileEditMode(false);
+      setStatus(res.message || 'Profile saved');
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+
+  saveAsProfileBtn.addEventListener('click', async () => {
+    try {
+      const res = await saveProfileAs();
+      setStatus(res.message || 'Profile saved as new file');
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  });
+
+  editProfileBtn.addEventListener('click', () => {
+    if (!profileModalFile) {
+      setStatus('No profile loaded for edit', true);
+      return;
+    }
+    setProfileEditMode(true);
+    profileEditor.focus();
+  });
+
+  closeProfileModalBtn.addEventListener('click', () => {
+    closeProfileModal();
+    setStatus('Profile preview closed');
+  });
+
+  document.addEventListener('click', (event) => {
+    if (profileModal.hidden) {
+      return;
+    }
+    if (!profileModal.contains(event.target) && event.target.id !== 'previewProfileBtn') {
+      closeProfileModal();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !profileModal.hidden) {
+      closeProfileModal();
+      setStatus('Profile preview closed');
+    }
+  });
+
+  profileSelect.addEventListener('change', async () => {
+    if (!profileModal.hidden) {
+      closeProfileModal();
+    }
+    setStatus(`Profile selected: ${profileSelect.value}`);
   });
 
   document.querySelectorAll('button[data-stage]').forEach((btn) => {

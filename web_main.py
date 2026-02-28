@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import asyncio
+import json
 import os
+import re
 import threading
 from dataclasses import asdict
 from datetime import datetime
@@ -36,6 +38,15 @@ class TempOffsetRequest(BaseModel):
     delta_c: float
 
 
+class ProfileContentRequest(BaseModel):
+    content: str
+
+
+class ProfileSaveAsRequest(BaseModel):
+    file_name: str
+    content: str
+
+
 class WebRoastManager:
     def __init__(self):
         self._lock = threading.RLock()
@@ -69,6 +80,22 @@ class WebRoastManager:
             raise HTTPException(status_code=404, detail="Profile not found")
         return candidate
 
+    def _safe_new_profile_path(self, file_name: str) -> Path:
+        name = (file_name or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="file_name is required")
+        if not name.endswith(".json"):
+            name = f"{name}.json"
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+            raise HTTPException(status_code=400, detail="file_name must use only letters, numbers, dot, dash, underscore")
+
+        candidate = (PROFILES_DIR / name).resolve()
+        if not str(candidate).startswith(str(PROFILES_DIR.resolve())):
+            raise HTTPException(status_code=400, detail="Invalid profile path")
+        if candidate.exists():
+            raise HTTPException(status_code=409, detail=f"Profile already exists: {name}")
+        return candidate
+
     def list_profiles(self):
         profiles = []
         for path in sorted(PROFILES_DIR.glob("*.json")):
@@ -92,6 +119,89 @@ class WebRoastManager:
                     }
                 )
         return profiles
+
+    def _validate_profile_payload(self, payload: dict) -> None:
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail="Profile must be a JSON object")
+
+        roast_profile = payload.get("roast_profile")
+        if not isinstance(roast_profile, list) or not roast_profile:
+            raise HTTPException(status_code=400, detail="'roast_profile' must be a non-empty list")
+
+        for idx, point in enumerate(roast_profile):
+            if not isinstance(point, (list, tuple)) or len(point) != 2:
+                raise HTTPException(status_code=400, detail=f"roast_profile[{idx}] must be [elapsed_s, temp_c]")
+            try:
+                float(point[0])
+                float(point[1])
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"roast_profile[{idx}] values must be numeric")
+
+        pid_gains = payload.get("pid_gains")
+        if pid_gains is not None:
+            if not isinstance(pid_gains, list) or len(pid_gains) != 3:
+                raise HTTPException(status_code=400, detail="'pid_gains' must be [kp, ki, kd]")
+            try:
+                [float(v) for v in pid_gains]
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="'pid_gains' values must be numeric")
+
+        pwm_period = payload.get("pwm_period")
+        if pwm_period is not None:
+            try:
+                if float(pwm_period) <= 0:
+                    raise HTTPException(status_code=400, detail="'pwm_period' must be > 0")
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="'pwm_period' must be numeric")
+
+        preheat = payload.get("preheat")
+        if preheat is not None:
+            if not isinstance(preheat, dict):
+                raise HTTPException(status_code=400, detail="'preheat' must be an object or null")
+            if "temp_c" not in preheat:
+                raise HTTPException(status_code=400, detail="'preheat.temp_c' is required when preheat is set")
+            try:
+                float(preheat["temp_c"])
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="'preheat.temp_c' must be numeric")
+
+    def get_profile_content(self, profile_file: str):
+        profile_path = self._safe_profile_path(profile_file)
+        try:
+            content = profile_path.read_text(encoding="utf-8")
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed reading profile: {exc}")
+        return {"file": profile_path.name, "content": content}
+
+    def save_profile_content(self, profile_file: str, content: str):
+        profile_path = self._safe_profile_path(profile_file)
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc.msg} (line {exc.lineno})")
+
+        self._validate_profile_payload(payload)
+
+        try:
+            profile_path.write_text(content.rstrip() + "\n", encoding="utf-8")
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed saving profile: {exc}")
+        return {"ok": True, "message": f"Profile saved: {profile_path.name}"}
+
+    def save_profile_as(self, file_name: str, content: str):
+        profile_path = self._safe_new_profile_path(file_name)
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc.msg} (line {exc.lineno})")
+
+        self._validate_profile_payload(payload)
+
+        try:
+            profile_path.write_text(content.rstrip() + "\n", encoding="utf-8")
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed saving profile: {exc}")
+        return {"ok": True, "message": f"Profile saved as: {profile_path.name}", "file": profile_path.name}
 
     def start(self, profile_file: str):
         profile_path = self._safe_profile_path(profile_file)
@@ -166,6 +276,21 @@ def index():
 @app.get("/api/profiles")
 def get_profiles():
     return manager.list_profiles()
+
+
+@app.post("/api/profiles/save-as")
+def save_profile_as(request: ProfileSaveAsRequest):
+    return manager.save_profile_as(request.file_name, request.content)
+
+
+@app.get("/api/profiles/{profile_file}")
+def get_profile_content(profile_file: str):
+    return manager.get_profile_content(profile_file)
+
+
+@app.put("/api/profiles/{profile_file}")
+def update_profile_content(profile_file: str, request: ProfileContentRequest):
+    return manager.save_profile_content(profile_file, request.content)
 
 
 @app.post("/api/session/start")
