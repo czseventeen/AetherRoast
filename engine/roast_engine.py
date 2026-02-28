@@ -45,8 +45,11 @@ class RoastSnapshot:
 
 STAGE_EVENT_LABELS = {
     "dry_end": "Dry End",
+    "maillard": "Maillard",
     "first_crack_start": "First Crack Start",
     "first_crack_end": "First Crack End",
+    "second_crack_start": "Second Crack Start",
+    "second_crack_end": "Second Crack End",
     "drop": "Drop",
 }
 

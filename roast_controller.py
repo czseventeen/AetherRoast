@@ -16,7 +16,15 @@ class RoastController:
         self.running = False
         self.manual_fan_speed = None
         self.temp_offset = 0.0
-        self._cli_stage_order = ["dry_end", "first_crack_start", "first_crack_end", "drop"]
+        self._cli_stage_order = [
+            "dry_end",
+            "maillard",
+            "first_crack_start",
+            "first_crack_end",
+            "second_crack_start",
+            "second_crack_end",
+            "drop",
+        ]
         self._cli_stage_index = 0
 
     def start(self):

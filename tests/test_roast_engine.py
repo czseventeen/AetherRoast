@@ -114,6 +114,25 @@ class RoastEngineTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("not allowed", result.message)
 
+    def test_extended_stage_markers_are_accepted(self):
+        engine = RoastEngine(log_file="test.csv")
+        result = engine.start("no_preheat.json")
+        self.assertTrue(result.ok)
+        self.assertTrue(self.wait_for_state(engine, RoastState.ROASTING.value))
+
+        for stage in (
+            "dry_end",
+            "maillard",
+            "first_crack_start",
+            "first_crack_end",
+            "second_crack_start",
+            "second_crack_end",
+            "drop",
+        ):
+            marked = engine.mark_stage(stage)
+            self.assertTrue(marked.ok, msg=f"Stage should be accepted: {stage}")
+        engine.stop()
+
     def test_ror_calculation_linear(self):
         engine = RoastEngine(log_file="test.csv")
         base = 1000.0
