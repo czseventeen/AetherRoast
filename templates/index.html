@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Profile Roasting</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Profile Roasting Console</h1>
+      <p class="subtitle">Live temperature, RoR, stages, and roast controls</p>
+    </header>
+
+    <section class="panel controls">
+      <div class="row">
+        <label for="profileSelect">Profile</label>
+        <select id="profileSelect"></select>
+        <button id="refreshProfiles">Refresh</button>
+      </div>
+      <div class="row buttons">
+        <button id="startBtn" class="primary">Start</button>
+        <button id="beanDropBtn">Bean Drop</button>
+        <button id="stopBtn" class="danger">Stop</button>
+        <button id="emergencyStopBtn" class="danger">EMERGENCY STOP</button>
+        <button id="downloadCsvBtn">Download CSV</button>
+      </div>
+      <div class="row buttons">
+        <button data-stage="dry_end">Dry End</button>
+        <button data-stage="first_crack_start">First Crack Start</button>
+        <button data-stage="first_crack_end">First Crack End</button>
+        <button data-stage="drop">Drop</button>
+      </div>
+      <div class="row buttons">
+        <button data-fan="20">Fan 20%</button>
+        <button data-fan="50">Fan 50%</button>
+        <button data-fan="100">Fan 100%</button>
+        <button data-delta="5">Temp +5C</button>
+        <button data-delta="-5">Temp -5C</button>
+      </div>
+      <p id="statusLine" class="status">Ready</p>
+    </section>
+
+    <section class="panel metrics">
+      <div class="metric"><span>State</span><strong id="stateVal">IDLE</strong></div>
+      <div class="metric"><span>Elapsed</span><strong id="elapsedVal">00:00.000</strong></div>
+      <div class="metric"><span>Stage</span><strong id="stageVal">Idle</strong></div>
+      <div class="metric"><span>Temp (C)</span><strong id="tempVal">0.00</strong></div>
+      <div class="metric"><span>Target (C)</span><strong id="targetVal">0.00</strong></div>
+      <div class="metric"><span>RoR (C/min)</span><strong id="rorVal">n/a</strong></div>
+    </section>
+
+    <section class="panel chart-panel">
+      <canvas id="roastChart"></canvas>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

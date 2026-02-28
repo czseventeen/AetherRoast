@@ -1,0 +1,102 @@
+:root {
+  --bg: #f4efe6;
+  --panel: #fffaf1;
+  --text: #2b2419;
+  --accent: #1d6b5f;
+  --danger: #a43f2e;
+  --line: #dccfb9;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  background: radial-gradient(circle at top right, #efe3cf, var(--bg));
+  color: var(--text);
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+header h1 {
+  margin: 0;
+}
+
+.subtitle {
+  margin-top: 4px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+button {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+button.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.metrics {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.metric {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.metric span {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.metric strong {
+  font-size: 20px;
+}
+
+.status {
+  margin: 0;
+  font-size: 13px;
+}
+
+.chart-panel {
+  min-height: 300px;
+}
+
+@media (max-width: 700px) {
+  .metric strong {
+    font-size: 18px;
+  }
+}

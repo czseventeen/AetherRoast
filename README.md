@@ -25,6 +25,11 @@ Supports temperature profiling, preheat control, and fan modulation via SSR and 
 pip install RPi.GPIO simple-pid pyvisa
 ```
 
+For web mode:
+```bash
+pip install -r requirements-web.txt
+```
+
 ## Usage
 
 ```bash
@@ -35,6 +40,20 @@ Example:
 ```bash
 python3 main.py colombia_huila_light.json
 ```
+
+Web UI mode:
+```bash
+python3 web_main.py
+```
+
+Then open `http://<raspberry-pi-ip>:8000`.
+
+## Architecture
+
+- `engine/roast_engine.py`: shared roast domain engine used by CLI and web adapters
+- `roast_controller.py`: CLI adapter (keyboard controls) over shared engine
+- `web_main.py`: FastAPI + WebSocket adapter over shared engine
+- `templates/` + `static/`: server-rendered web UI with vanilla JS chart/controls
 
 ## Roast Profile Format
 
@@ -62,16 +81,27 @@ python3 main.py colombia_huila_light.json
 
 ```
 ProfileRoasting_v1/
-├── main.py                     # Entry point
-├── roast_controller.py         # Main controller orchestration
+├── main.py                     # CLI entry point
+├── web_main.py                 # Web entry point (FastAPI)
+├── roast_controller.py         # CLI adapter over shared engine
+├── engine/
+│   ├── __init__.py
+│   └── roast_engine.py         # Shared roast lifecycle/state machine
 ├── controller/                 # Hardware control modules
 │   ├── ssr.py                 # SSR/GPIO control
 │   ├── temperature.py         # Temperature sensor & PID
 │   ├── fan.py                 # Fan speed control
 │   └── spd1168x.py           # Power supply interface
+├── templates/
+│   └── index.html             # Web UI template
+├── static/
+│   ├── app.js                 # Web UI logic (WebSocket/chart/controls)
+│   └── style.css              # Web UI styles
 ├── utils/                      # Utility functions
 │   ├── logging.py             # CSV data logging
 │   └── helpers.py             # Stage detection & formatting
+├── tests/
+│   └── test_roast_engine.py   # Engine unit tests (mocked hardware)
 └── profiles/                   # Roast profiles
     ├── profile_loader.py      # JSON profile loading
     └── *.json                 # Profile files

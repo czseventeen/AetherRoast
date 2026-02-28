@@ -1,141 +1,60 @@
 #!/usr/bin/env python3
-import time
+import select
+import sys
+import termios
 import threading
-from controller.ssr import SSRController
-from controller.temperature import TemperatureController
-from controller.fan import FanController
-from utils.logging import RoastLogger
-from utils.helpers import get_roast_stage, get_stage_duration, advance_roast_stage, format_elapsed_time, reset_roast_stage
-from profiles.profile_loader import RoastProfile
+import time
+import tty
+
+from engine.roast_engine import RoastEngine, RoastState
+
 
 class RoastController:
     def __init__(self, ssr_pin=26, roast_profile_file=None, log_file="roast_log.csv"):
-        # Load profile first to get PID gains and PWM period
-        self.profile = RoastProfile(roast_profile_file)
-        
-        self.ssr = SSRController(ssr_pin, self.profile.pwm_period)
-        self.temp_controller = TemperatureController(
-            pwm_period=self.profile.pwm_period,
-            pid_gains=self.profile.pid_gains
-        )
-        self.logger = RoastLogger(log_file, self.profile.name)
-        self.fan = FanController()
-        
+        self.roast_profile_file = roast_profile_file
+        self.engine = RoastEngine(ssr_pin=ssr_pin, log_file=log_file)
         self.running = False
-        self.start_time = None
-        self.roast_start_time = None
-        self.preheat_complete = False
-        self.temp_offset = 0.0
         self.manual_fan_speed = None
-    
-    def control_step(self):
-        """Execute one control step"""
-        roast_elapsed = time.time() - self.roast_start_time if self.roast_start_time else 0
-        
-        # Update setpoint from profile if available
-        if self.profile.profile_data:
-            base_target = self.profile.interpolate_setpoint(roast_elapsed)
-            target_temp = base_target + self.temp_offset
-            self.temp_controller.set_target(target_temp)
-        
-        # Read temperature and calculate output
-        current_temp = self.temp_controller.read_temperature()
-        on_time = self.temp_controller.calculate_output(current_temp)
-        stage = get_roast_stage()
-        stage_duration = get_stage_duration(time.time())
-        
-        # Console output and log data
-        self.logger.log_step(roast_elapsed, stage, stage_duration, self.temp_controller.setpoint, current_temp, on_time)
-        
-        # Control SSR
-        self.ssr.control_output(on_time)
-    
-    def preheat_step(self, target_temp):
-        """Execute one preheat control step"""
-        elapsed = time.time() - self.start_time if self.start_time else 0
-        current_temp = self.temp_controller.read_temperature()
-        on_time = self.temp_controller.calculate_output(current_temp)
-        
-        # Console output and log preheat data
-        self.logger.log_step(elapsed, "Preheating", elapsed, target_temp, current_temp, on_time)
-        
-        self.ssr.control_output(on_time)
-        return current_temp >= target_temp - 2.0  # Within 2°C tolerance
-    
+        self.temp_offset = 0.0
+        self._cli_stage_order = ["dry_end", "first_crack_start", "first_crack_end", "drop"]
+        self._cli_stage_index = 0
+
     def start(self):
-        """Start the roasting control loop"""
+        """Start roast control and block until session ends."""
+        if not self.roast_profile_file:
+            raise ValueError("roast_profile_file is required")
+
+        result = self.engine.start(self.roast_profile_file)
+        if not result.ok:
+            raise RuntimeError(result.message)
+
+        snapshot = self.engine.get_snapshot()
+        print(f"[INFO] Roast session started for '{snapshot.profile_name}'")
+        if snapshot.state == RoastState.PREHEATING.value:
+            print("[INFO] Preheating started. Press ENTER when beans are dropped.")
+        else:
+            print("[INFO] Starting roast phase")
+        print("[INFO] Controls: 1-9=Fan%, 0=100%, +/-=Temp±5°C, ENTER=Bean Drop/Stage, r=Reset, q=Quit")
+
         self.running = True
-        
+        self._cli_stage_index = 0
+        keyboard_thread = threading.Thread(target=self.keyboard_loop, daemon=True)
+        keyboard_thread.start()
+
         try:
-            # Preheat phase if configured
-            if self.profile.preheat:
-                self.preheat_phase()
-            
-            # Start roasting phase only if still running
-            if not self.running:
-                return
-            
-            # Start roast timer when beans drop
-            self.roast_start_time = time.time()
-                
-            reset_roast_stage(time.time())  # Reset stage tracking for new roast
-            self.fan.set_speed(100)  # Set fan to 100% for roasting
-            print(f"[INFO] Starting roast phase for '{self.profile.name}'")
-            print(f"[INFO] Controls: 1-9=Fan%, 0=100%, +/-=Temp±5°C, ENTER=Next Stage, r=Reset, q=Quit")
-            
-            # Start keyboard thread for roast controls
-            keyboard_thread = threading.Thread(target=self.keyboard_loop)
-            keyboard_thread.daemon = True
-            keyboard_thread.start()
-            
             while self.running:
-                self.control_step()
-        except KeyboardInterrupt:
-            print("\n[INFO] KeyboardInterrupt detected - stopping roast...")
-        except Exception as e:
-            print(f"[ERROR] {e}")
+                state = self.engine.get_snapshot().state
+                if state in (RoastState.IDLE.value, RoastState.FAULT.value):
+                    break
+                time.sleep(0.2)
         finally:
-            self.shutdown()
-    
-    def preheat_phase(self):
-        """Handle preheat phase"""
-        preheat_temp = self.profile.preheat["temp_c"]
-        self.temp_controller.set_target(preheat_temp)
-        self.fan.set_speed(100)  # Start fan at 100% for heating
-        print(f"[INFO] Starting preheat to {preheat_temp}°C... Press ENTER when beans are dropped.")
-        
-        # Start timing from preheat
-        self.start_time = time.time()
-        
-        # Start bean drop thread
-        input_thread = threading.Thread(target=self.wait_for_bean_drop)
-        input_thread.daemon = True
-        input_thread.start()
-        
-        # Continue heating until target reached or user presses enter
-        target_reached = False
-        while self.running and not self.preheat_complete:
-            if self.preheat_step(preheat_temp) and not target_reached:
-                self.fan.set_speed(20)  # Reduce to 20% when target reached
-                target_reached = True
-    
-    def wait_for_bean_drop(self):
-        """Wait for ENTER during preheat"""
-        try:
-            input()
-            if self.running:
-                self.preheat_complete = True
-                print("[INFO] Beans dropped! Starting roast profile...")
-        except (EOFError, KeyboardInterrupt):
-            self.shutdown()
-    
+            self.running = False
+
     def keyboard_loop(self):
-        """Handle keyboard controls during roast"""
-        import sys, tty, termios, select
-        
+        """Handle keyboard controls during roast."""
         if not sys.stdin.isatty():
             return
-            
+
         old_settings = termios.tcgetattr(sys.stdin)
         try:
             tty.setraw(sys.stdin.fileno())
@@ -145,52 +64,72 @@ class RoastController:
                     if ord(key) == 3:  # Ctrl+C
                         self.shutdown()
                         break
-                    elif ord(key) == 13:  # ENTER
-                        new_stage = advance_roast_stage(time.time())
-                        print(f"\n[STAGE] Advanced to: {new_stage}")
-                    else:
-                        self.handle_keypress(key)
-        except:
+                    if ord(key) == 13:  # ENTER
+                        state = self.engine.get_snapshot().state
+                        if state in (RoastState.PREHEATING.value, RoastState.READY_FOR_BEAN_DROP.value):
+                            result = self.engine.bean_drop()
+                            if result.ok:
+                                print("\n[INFO] Beans dropped! Starting roast profile...")
+                            else:
+                                print(f"\n[WARN] {result.message}")
+                        elif state == RoastState.ROASTING.value:
+                            if self._cli_stage_index < len(self._cli_stage_order):
+                                stage_key = self._cli_stage_order[self._cli_stage_index]
+                                result = self.engine.mark_stage(stage_key)
+                                if result.ok:
+                                    self._cli_stage_index += 1
+                                    print(f"\n[STAGE] {result.message}")
+                                else:
+                                    print(f"\n[WARN] {result.message}")
+                            else:
+                                print("\n[INFO] Final stage already marked.")
+                        continue
+                    self.handle_keypress(key)
+        except Exception:
             pass
         finally:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-    
+
     def handle_keypress(self, key):
-        """Process keyboard input for real-time adjustments"""
-        if key in '123456789':
+        """Process keyboard input for realtime adjustments."""
+        if key in "123456789":
             fan_speed = int(key) * 10
-            self.manual_fan_speed = fan_speed
-            self.fan.set_speed(fan_speed)
-            print(f"[MANUAL] Fan speed: {fan_speed}%")
-        elif key == '0':
-            self.manual_fan_speed = 100
-            self.fan.set_speed(100)
-            print(f"[MANUAL] Fan speed: 100%")
-        elif key == '+':
-            self.temp_offset += 5.0
-            print(f"[MANUAL] Temp offset: {self.temp_offset:+.1f}°C")
-        elif key == '-':
-            self.temp_offset -= 5.0
-            print(f"[MANUAL] Temp offset: {self.temp_offset:+.1f}°C")
-        elif key == 'r':
+            result = self.engine.set_fan(fan_speed)
+            if result.ok:
+                self.manual_fan_speed = fan_speed
+                print(f"[MANUAL] Fan speed: {fan_speed}%")
+        elif key == "0":
+            result = self.engine.set_fan(100)
+            if result.ok:
+                self.manual_fan_speed = 100
+                print("[MANUAL] Fan speed: 100%")
+        elif key == "+":
+            result = self.engine.set_temp_offset(5.0)
+            if result.ok:
+                self.temp_offset += 5.0
+                print(f"[MANUAL] Temp offset: {self.temp_offset:+.1f}°C")
+        elif key == "-":
+            result = self.engine.set_temp_offset(-5.0)
+            if result.ok:
+                self.temp_offset -= 5.0
+                print(f"[MANUAL] Temp offset: {self.temp_offset:+.1f}°C")
+        elif key == "r":
+            if self.temp_offset != 0.0:
+                self.engine.set_temp_offset(-self.temp_offset)
             self.temp_offset = 0.0
             self.manual_fan_speed = None
-            self.fan.set_speed(100)
-            print(f"[MANUAL] Reset - Fan: 100%, Temp offset: 0°C")
-        elif key == 'q':
-            print(f"[MANUAL] Quit requested")
+            self.engine.set_fan(100)
+            print("[MANUAL] Reset - Fan: 100%, Temp offset: 0°C")
+        elif key == "q":
+            print("[MANUAL] Quit requested")
             self.shutdown()
-    
+
     def shutdown(self):
-        """Shutdown the controller safely"""
-        if not self.running:
+        """Shutdown the controller safely."""
+        if not self.running and self.engine.get_snapshot().state == RoastState.IDLE.value:
             return
-        
+
         print("[INFO] Shutting down controller...")
         self.running = False
-        self.ssr.turn_off()
-        self.ssr.cleanup()
-        self.fan.shutdown()
-        self.logger.close()
-        print(f"[INFO] System shut down safely. SSR OFF. Log saved.")
-    
+        self.engine.shutdown()
+        print("[INFO] System shut down safely. SSR OFF. Log saved.")

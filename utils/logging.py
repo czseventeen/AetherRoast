@@ -25,23 +25,46 @@ class RoastLogger:
             "stage_duration_mmss_mmm",
             "target_temp_C",
             "actual_temp_C",
-            "pid_on_time_s"
+            "pid_on_time_s",
+            "elapsed_s",
+            "ror_c_per_min",
+            "event_marker",
         ])
     
-    def log_step(self, elapsed, stage, stage_duration, target_temp, actual_temp, on_time, show_console=True):
+    def log_step(
+        self,
+        elapsed,
+        stage,
+        stage_duration,
+        target_temp,
+        actual_temp,
+        on_time,
+        show_console=True,
+        ror_c_per_min=None,
+        event_marker=None,
+    ):
         """Log a single roasting step and optionally display to console"""
         from utils.helpers import format_elapsed_time
         mmss_mmm = format_elapsed_time(elapsed)
         stage_mmss_mmm = format_elapsed_time(stage_duration)
+        ror_display = "n/a" if ror_c_per_min is None else f"{ror_c_per_min:+.2f}C/min"
 
         # Console output
         if show_console:
             print(f"\rElapsed: {mmss_mmm} | Stage: {stage} ({stage_mmss_mmm}) | Temp: {actual_temp:.2f}°C | "
-                  f"Target: {target_temp:.1f}°C | SSR ON: {on_time:.2f}s")
+                  f"Target: {target_temp:.1f}°C | RoR: {ror_display} | SSR ON: {on_time:.2f}s")
 
         # File logging
         self.csv_writer.writerow([
-            mmss_mmm, stage, stage_mmss_mmm, round(target_temp, 1), round(actual_temp, 2), round(on_time, 2)
+            mmss_mmm,
+            stage,
+            stage_mmss_mmm,
+            round(target_temp, 1),
+            round(actual_temp, 2),
+            round(on_time, 2),
+            round(elapsed, 3),
+            "" if ror_c_per_min is None else round(ror_c_per_min, 3),
+            event_marker or "",
         ])
         self.log_fh.flush()
     
