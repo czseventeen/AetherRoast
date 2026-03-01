@@ -31,7 +31,9 @@ class CommandResult:
 @dataclass
 class RoastSnapshot:
     state: str = RoastState.IDLE.value
-    elapsed_s: float = 0.0
+    session_elapsed_s: float = 0.0
+    roast_elapsed_s: Optional[float] = None
+    bean_drop_elapsed_s: Optional[float] = None
     target_temp_c: float = 0.0
     actual_temp_c: float = 0.0
     ror_c_per_min: Optional[float] = None
@@ -90,6 +92,7 @@ class RoastEngine:
         self._pending_event_marker: Optional[str] = None
         self._last_event_marker: Optional[str] = None
         self._last_event_elapsed_s: Optional[float] = None
+        self._bean_drop_elapsed_s: Optional[float] = None
         self._did_reduce_preheat_fan = False
         self._is_cleaned_up = True
         self._last_elapsed_s = 0.0
@@ -108,9 +111,12 @@ class RoastEngine:
             now = time.time()
             elapsed = self._compute_elapsed(now)
             stage_elapsed = self._compute_stage_elapsed(now)
+            roast_elapsed = (now - self.roast_start_time) if self.roast_start_time else None
             return RoastSnapshot(
                 state=self.state.value,
-                elapsed_s=elapsed,
+                session_elapsed_s=elapsed,
+                roast_elapsed_s=roast_elapsed,
+                bean_drop_elapsed_s=self._bean_drop_elapsed_s,
                 target_temp_c=self._target_temp_c,
                 actual_temp_c=self._actual_temp_c,
                 ror_c_per_min=self._ror_c_per_min,
@@ -148,6 +154,7 @@ class RoastEngine:
             self._pending_event_marker = "bean_drop"
             self._last_event_marker = "bean_drop"
             self._last_event_elapsed_s = self._compute_elapsed(now)
+            self._bean_drop_elapsed_s = self._last_event_elapsed_s
             if self.fan:
                 self.fan.set_speed(100)
             return CommandResult(True, "Bean drop accepted, roast started")
@@ -199,6 +206,7 @@ class RoastEngine:
         with self._lock:
             if self.state != RoastState.FAULT:
                 self.state = RoastState.IDLE
+            self._bean_drop_elapsed_s = None
             self._publish_snapshot_unlocked()
         return CommandResult(True, "Stop requested")
 
@@ -221,6 +229,7 @@ class RoastEngine:
 
         with self._lock:
             self.state = RoastState.IDLE
+            self._bean_drop_elapsed_s = None
             self._publish_snapshot_unlocked()
         return CommandResult(True, "Emergency shutdown complete")
 
@@ -249,6 +258,7 @@ class RoastEngine:
         self._pending_event_marker = None
         self._last_event_marker = None
         self._last_event_elapsed_s = None
+        self._bean_drop_elapsed_s = None
         self._did_reduce_preheat_fan = False
         self._is_cleaned_up = False
         self._last_elapsed_s = 0.0
@@ -271,6 +281,7 @@ class RoastEngine:
             self._pending_event_marker = "bean_drop"
             self._last_event_marker = "bean_drop"
             self._last_event_elapsed_s = self._compute_elapsed(now)
+            self._bean_drop_elapsed_s = self._last_event_elapsed_s
 
         self._publish_snapshot_unlocked()
 

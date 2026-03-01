@@ -23,6 +23,7 @@ const seenEventKeys = new Set();
 const UI_UPDATE_INTERVAL_MS = 1000;
 let lastUiUpdateMs = 0;
 let profileModalFile = '';
+let beanDropElapsed = null;
 const chartData = {
   datasets: [
     { label: 'Temperature (C)', data: [], borderColor: '#c14f2a', yAxisID: 'yTemp', tension: 0.2, pointRadius: 0 },
@@ -90,6 +91,30 @@ function formatElapsed(seconds) {
 function setStatus(text, isError = false) {
   statusLine.textContent = text;
   statusLine.style.color = isError ? '#a43f2e' : '#2b2419';
+}
+
+function updateChartXAxisTitle() {
+  roastChart.options.scales.x.title.text = beanDropElapsed == null ? 'Elapsed (s)' : 'Time from Bean Drop (s)';
+}
+
+function toChartTime(elapsedSeconds) {
+  const t = Number(elapsedSeconds || 0);
+  return beanDropElapsed == null ? t : (t - beanDropElapsed);
+}
+
+function setBeanDropOrigin(elapsedSeconds) {
+  const origin = Number(elapsedSeconds);
+  if (!Number.isFinite(origin) || beanDropElapsed != null) {
+    return;
+  }
+  beanDropElapsed = origin;
+  chartData.datasets.forEach((dataset) => {
+    dataset.data = dataset.data.map((point) => ({ x: point.x - origin, y: point.y }));
+  });
+  stageEvents.forEach((evt) => {
+    evt.t -= origin;
+  });
+  updateChartXAxisTitle();
 }
 
 function saveGraphSnapshot() {
@@ -214,7 +239,7 @@ async function saveProfileAs() {
 }
 
 function pushChartPoint(snapshot) {
-  const t = Number(snapshot.elapsed_s || 0);
+  const t = toChartTime(snapshot.session_elapsed_s);
   const temp = Number(snapshot.actual_temp_c || 0);
   const ror = snapshot.ror_c_per_min == null ? null : Number(snapshot.ror_c_per_min);
 
@@ -245,12 +270,13 @@ function registerStageEvent(marker, elapsedSeconds) {
   if (!marker || elapsedSeconds == null) {
     return;
   }
-  const t = Number(elapsedSeconds);
-  const key = `${marker}@${t.toFixed(2)}`;
+  const rawT = Number(elapsedSeconds);
+  const key = `${marker}@${rawT.toFixed(2)}`;
   if (seenEventKeys.has(key)) {
     return;
   }
   seenEventKeys.add(key);
+  const t = toChartTime(rawT);
   const prev = stageEvents.length ? stageEvents[stageEvents.length - 1].t : null;
   const delta = prev == null ? t : (t - prev);
   stageEvents.push({
@@ -267,8 +293,15 @@ function updateSnapshot(snapshot, force = false) {
   }
   lastUiUpdateMs = nowMs;
 
+  if (snapshot.bean_drop_elapsed_s != null) {
+    setBeanDropOrigin(snapshot.bean_drop_elapsed_s);
+  }
+
   stateVal.textContent = snapshot.state;
-  elapsedVal.textContent = formatElapsed(snapshot.elapsed_s);
+  const elapsedForDisplay = snapshot.roast_elapsed_s != null
+    ? Number(snapshot.roast_elapsed_s)
+    : Number(snapshot.session_elapsed_s ?? 0);
+  elapsedVal.textContent = formatElapsed(elapsedForDisplay);
   stageVal.textContent = snapshot.stage_label;
   stageElapsedVal.textContent = formatElapsed(snapshot.stage_elapsed_s);
   tempVal.textContent = Number(snapshot.actual_temp_c || 0).toFixed(2);
@@ -301,6 +334,8 @@ function wireButtons() {
       chartData.datasets[1].data = [];
       stageEvents.length = 0;
       seenEventKeys.clear();
+      beanDropElapsed = null;
+      updateChartXAxisTitle();
       roastChart.update('none');
       const profile_file = profileSelect.value;
       const res = await api('/api/session/start', 'POST', { profile_file });
@@ -471,6 +506,7 @@ function connectWs() {
 (async function bootstrap() {
   wireButtons();
   try {
+    updateChartXAxisTitle();
     await loadProfiles();
     const snapshot = await api('/api/session');
     updateSnapshot(snapshot, true);
