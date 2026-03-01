@@ -20,10 +20,9 @@ const rorVal = document.getElementById('rorVal');
 const ctx = document.getElementById('roastChart');
 const stageEvents = [];
 const seenEventKeys = new Set();
-const UI_UPDATE_INTERVAL_MS = 1000;
-let lastUiUpdateMs = 0;
 let profileModalFile = '';
 let beanDropElapsed = null;
+let lastSnapshot = null;
 const chartData = {
   datasets: [
     { label: 'Temperature (C)', data: [], borderColor: '#c14f2a', yAxisID: 'yTemp', tension: 0.2, pointRadius: 0 },
@@ -286,24 +285,15 @@ function registerStageEvent(marker, elapsedSeconds) {
   });
 }
 
-function updateSnapshot(snapshot, force = false) {
-  const nowMs = Date.now();
-  if (!force && nowMs - lastUiUpdateMs < UI_UPDATE_INTERVAL_MS) {
-    return;
-  }
-  lastUiUpdateMs = nowMs;
-
+function updateSnapshot(snapshot) {
   if (snapshot.bean_drop_elapsed_s != null) {
     setBeanDropOrigin(snapshot.bean_drop_elapsed_s);
   }
 
+  lastSnapshot = { ...snapshot, receivedAt: Date.now() };
+
   stateVal.textContent = snapshot.state;
-  const elapsedForDisplay = snapshot.roast_elapsed_s != null
-    ? Number(snapshot.roast_elapsed_s)
-    : Number(snapshot.session_elapsed_s ?? 0);
-  elapsedVal.textContent = formatElapsed(elapsedForDisplay);
   stageVal.textContent = snapshot.stage_label;
-  stageElapsedVal.textContent = formatElapsed(snapshot.stage_elapsed_s);
   tempVal.textContent = Number(snapshot.actual_temp_c || 0).toFixed(2);
   targetVal.textContent = Number(snapshot.target_temp_c || 0).toFixed(2);
   rorVal.textContent = snapshot.ror_c_per_min == null ? 'n/a' : Number(snapshot.ror_c_per_min).toFixed(2);
@@ -335,6 +325,7 @@ function wireButtons() {
       stageEvents.length = 0;
       seenEventKeys.clear();
       beanDropElapsed = null;
+      lastSnapshot = null;
       updateChartXAxisTitle();
       roastChart.update('none');
       const profile_file = profileSelect.value;
@@ -503,15 +494,26 @@ function connectWs() {
   };
 }
 
+function tickElapsedTimers() {
+  if (!lastSnapshot || !['PREHEATING', 'READY_FOR_BEAN_DROP', 'ROASTING'].includes(lastSnapshot.state)) {
+    return;
+  }
+  const deltaSec = (Date.now() - lastSnapshot.receivedAt) / 1000;
+  const elapsed = lastSnapshot.roast_elapsed_s != null ? Number(lastSnapshot.roast_elapsed_s) : Number(lastSnapshot.session_elapsed_s ?? 0);
+  elapsedVal.textContent = formatElapsed(elapsed + deltaSec);
+  stageElapsedVal.textContent = formatElapsed(Number(lastSnapshot.stage_elapsed_s ?? 0) + deltaSec);
+}
+
 (async function bootstrap() {
   wireButtons();
   try {
     updateChartXAxisTitle();
     await loadProfiles();
     const snapshot = await api('/api/session');
-    updateSnapshot(snapshot, true);
+    updateSnapshot(snapshot);
   } catch (err) {
     setStatus(err.message, true);
   }
+  setInterval(tickElapsedTimers, 1000);
   connectWs();
 })();
